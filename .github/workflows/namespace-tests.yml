@@ -54,43 +54,13 @@ jobs:
             libaudit-dev systemd-dev \
             git patch python3-pexpect curl tar diffutils \
             gawk diffstat iptables iproute2 iputils-ping kmod openssl \
-            util-linux ccache
+            util-linux ccache strongswan
 
       - name: Prepare host
         run: sudo ./testing/ns/prepare-host.sh
 
       # The caches are restored and saved explicitly: the post-job save
       # of actions/cache is skipped when a test fails.
-
-      # strongSwan only changes with install-strongswan.sh; it is
-      # built into a staging directory that is cached.
-      - name: Restore strongSwan
-        id: strongswan-cache
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/strongswan-root
-          key: strongswan-ubuntu-26.04-${{ runner.arch }}-${{ hashFiles('testing/ns/install-strongswan.sh') }}
-
-      - name: Build strongSwan
-        if: steps.strongswan-cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get install -y --no-install-recommends \
-            libssl-dev libgmp-dev libcap-dev
-          DESTDIR="$HOME/strongswan-root" ./testing/ns/install-strongswan.sh
-
-      - name: Save strongSwan
-        if: steps.strongswan-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ~/strongswan-root
-          key: ${{ steps.strongswan-cache.outputs.cache-primary-key }}
-
-      - name: Install strongSwan
-        run: |
-          sudo cp -R "$HOME/strongswan-root/." /
-          sudo ldconfig
-          sudo mkdir -p /run/strongswan
-          strongswan version
 
       # Object files can't be cached (checkout makes every source file
       # newer, so make rebuilds everything); use ccache.  Each commit

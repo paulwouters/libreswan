@@ -27,7 +27,7 @@ Host requirements
   `linux-azure`) have these, mostly as modules.
 
 - the tests run on the host itself: libreswan is installed into
-  `/usr/local`, strongSwan into `/usr` and `/etc/strongswan`, and
+  `/usr/local`, the test configuration into `/etc/strongswan`, and
   nsrun writes to `/run/{netns,mountns,utsns}` and `/testing`.  Use a
   VM or a throwaway machine.
 
@@ -67,8 +67,7 @@ also pass on kernels built without these options:
         libaudit-dev systemd-dev \
         git patch python3-pexpect curl tar diffutils \
         gawk diffstat iptables iproute2 iputils-ping kmod openssl \
-        util-linux \
-        libssl-dev libgmp-dev libcap-dev
+        util-linux strongswan
 
 Beyond the basic build and test lists:
 
@@ -79,7 +78,7 @@ Beyond the basic build and test lists:
   fails with `install: missing destination file operand after
   ...ipsec.service`
 
-- `libaudit-dev`: see step 4
+- `libaudit-dev`: see step 3
 
 - `gawk`, `diffstat`: used by the output sanitizers; without `gawk`
   the sanitized output is silently empty and tests such as
@@ -88,10 +87,7 @@ Beyond the basic build and test lists:
 - `iptables`, `iproute2`, `iputils-ping`, `kmod`, `openssl`,
   `util-linux`: used by nsrun and the test scripts
 
-- `libssl-dev`, `libgmp-dev`, `libcap-dev`: to build strongSwan, see
-  step 3
-
-Do not install the distribution's `strongswan` package, see step 3.
+- `strongswan`: used by the `interop-*-strongswan-*` tests
 
 
 2. Prepare the host
@@ -103,25 +99,7 @@ This loads the kernel modules used by the tests.  It is needed once
 after each boot.
 
 
-3. Build and install strongSwan
--------------------------------
-
-The `interop-*-strongswan-*` tests expect Fedora's strongSwan 6.0.7
-(as used by the KVM tests): the `strongswan` command (Debian/Ubuntu
-call it `ipsec`), `/usr/libexec/strongswan/charon`, configuration in
-`/etc/strongswan/`, the version `U6.0.7` (checked by
-`testing/guestbin/swan-prep`) and the `bypass-lan` and `stroke`
-plugins.  Ubuntu's package (6.0.4, Debian layout) doesn't work, so
-build it from source using Fedora's configure options:
-
-    ./testing/ns/install-strongswan.sh
-
-This downloads, verifies, builds (about 30 seconds) and installs
-strongSwan.  `strongswan version` should print `Linux strongSwan
-U6.0.7/...`.
-
-
-4. Build and install libreswan
+3. Build and install libreswan
 ------------------------------
 
     make -j$(nproc) USE_LINUX_AUDIT=true
@@ -136,7 +114,7 @@ Changing a make variable doesn't trigger a rebuild; if the tree was
 already built without it, run `make clean` first.
 
 
-5. Generate the test certificates
+4. Generate the test certificates
 ---------------------------------
 
     make -C testing/x509
@@ -147,7 +125,7 @@ generated (valid from 11 months ago for 24 months; the up-to-date CRL
 for 360 days), so regenerate them now and then.
 
 
-6. Run the tests
+5. Run the tests
 ----------------
 
     ./testing/utils/namespace-runner.py ikev2-0* interop-ikev2-strongswan-0*
@@ -164,6 +142,10 @@ Useful options:
 - `--diff`: print the output differences of failed tests at the end
 
 - `-v`: print nsrun's output (interleaved)
+
+- `-s`: accept any strongSwan version (`testing/guestbin/swan-prep`
+  otherwise requires 6.0.7, the version used to generate the
+  reference output)
 
 The runner prints a summary and exits non-zero when a test failed.
 The results of each test are in `testing/pluto/<test>/OUTPUT/`:
@@ -202,7 +184,9 @@ Troubleshooting
     `-09-psk-aes-ccm` fail.
 
 `strongswan U6.0.7 must be installed` in the console output
-:   The wrong strongSwan is installed, see step 3.
+:   The installed strongSwan isn't the version used to generate the
+    reference output; use `namespace-runner.py -s` (`nsrun --sa`) to
+    skip the check.
 
 
 GitHub Actions
@@ -216,9 +200,6 @@ the job's page; when tests fail, their `OUTPUT/` directories are
 uploaded as the `nsrun-output` artifact.
 
 To save time it caches:
-
-- the strongSwan install (built with `DESTDIR` set into a staging
-  directory, keyed on `install-strongswan.sh`)
 
 - the libreswan object files, using `ccache` (a new entry per commit,
   restoring the most recent one)
