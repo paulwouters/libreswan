@@ -40,6 +40,8 @@ import socket
 import binascii
 import fcntl
 import tempfile
+import fcntl
+import tempfile
 import platform  # just for host name
 
 from fab import logutil
@@ -3157,6 +3159,8 @@ def setup_single_test(args, cwd=None):
             os.chdir(tdir)
         else:
             logger.error("given --testname %s and can't find directory %s" % (args.testname, tdir))
+            if exitcode:
+                sys.exit(1)
             return
 
     test = Test(args, cwd=cwd)
@@ -3202,6 +3206,9 @@ def do_single_test(args=None, test=None, tlr=None):
     e = None
 
     if test.do_test():
+        # the test aborted before it could run, never report a pass
+        if exitcode:
+            sys.exit(1)
         os.chdir("..")  # chdir end
         return True
 
@@ -3281,7 +3288,10 @@ def check_host_xfrm_stack():
     # check if there is XFRM stack on the host
 
     v_line = runcmd("ipsec version")
-    if not os.path.isfile("/proc/net/xfrm_stat"):
+    # /proc/net/xfrm_stat needs CONFIG_XFRM_STATISTICS; the sysctl
+    # only needs CONFIG_XFRM
+    if not os.path.isfile("/proc/net/xfrm_stat") and \
+       not os.path.isfile("/proc/sys/net/core/xfrm_acq_expires"):
         logger.error( "ABORT no Linux IPsec stack found. cannot run test, %s", v_line)
         return True
 
@@ -3599,7 +3609,8 @@ class Namespace:
     def ns_add_testing_dir(self, testingdir, shell):
         d = "/testing"
         if not os.path.isdir(d):
-            cmd = "mkdir %s" % d
+            # -p, parallel tests race to create it
+            cmd = "mkdir -p %s" % d
             if sudo_shell_run(cmd, shell):
                 raise Exception("ERROR: %s" % cmd)
         cmd = "mount --bind %s /testing" % testingdir

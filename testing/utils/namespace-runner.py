@@ -79,6 +79,21 @@ def main():
     diff = options.diff
     strongswan = options.strongswan
 
+    # the shell leaves a glob such as ikev2-0* unexpanded when it does
+    # not match in the current directory; expand it in testing/pluto
+    plutodir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "..", "pluto")
+    names = list()
+    for i in args:
+        if any(c in i for c in "*?[") and not os.path.exists(i):
+            matches = sorted(d for d in glob.glob(os.path.join(plutodir, os.path.basename(i)))
+                             if os.path.isdir(d))
+            if not matches:
+                print("ERROR: no test matches %s"%i, file=sys.stderr)
+                sys.exit(1)
+            names.extend(matches)
+        else:
+            names.append(i)
+
     # running the same test twice in parallel makes both copies fail
     # (shared namespaces and OUTPUT directory); run each test once
     tests = list()
